@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>构建用户运营体系 - HTML 幻灯片</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* ===========================================
+           THEME TOKENS
+           Adjust these values to tune the presentation chrome.
+           =========================================== */
+        :root {
+            --stage-bg: #071426;
+            --slide-bg: #dcecfb;
+            --chrome-bg: rgba(6, 25, 52, 0.72);
+            --chrome-border: rgba(180, 217, 255, 0.35);
+            --chrome-text: #f8fbff;
+            --chrome-muted: rgba(248, 251, 255, 0.68);
+            --accent: #f3b300;
+            --accent-blue: #3a8cff;
+            --font-display: 'Noto Sans SC', sans-serif;
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --duration-normal: 620ms;
+        }
+
+        /* ===========================================
+           RESET AND BASE TYPOGRAPHY
+           Keeps browser defaults from changing the fixed 1920x1080 stage.
+           =========================================== */
+        * {
+            box-sizing: border-box;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        /* ===========================================
+           FIXED 16:9 STAGE: MANDATORY BASE STYLES
+           Include this ENTIRE file in every presentation.
+           Slides are authored at 1920×1080 and scaled as a whole.
+           =========================================== */
+
+        /* 1. Lock the browser viewport */
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: var(--stage-bg, #000);
+        }
+
+        /* 2. Full-window deck viewport */
+        .deck-viewport {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            background: var(--stage-bg, #000);
+        }
+
+        /* 3. Fixed 16:9 design canvas.
+           JavaScript sets transform: translate(...) scale(...). */
+        .deck-stage {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            transform-origin: 0 0;
+            background: var(--slide-bg, #fff);
+        }
+
+        /* 4. Slides stack inside the fixed stage.
+           Content must be laid out at 1920×1080, not reflowed per device. */
+        .slide {
+            position: absolute;
+            inset: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            display: block;
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            background: var(--slide-bg, #fff);
+        }
+
+        .slide.active,
+        .slide.visible {
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 1;
+        }
+
+        /* 5. Keep media inside authored slide bounds */
+        img,
+        video,
+        canvas,
+        svg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* 6. Presentation chrome stays outside the slide design system */
+        .deck-controls {
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        /* 7. Print one fixed-size slide per page */
+        @media print {
+            html,
+            body {
+                width: 1920px;
+                height: auto;
+                overflow: visible;
+                background: #fff;
+            }
+
+            .deck-viewport {
+                position: static;
+                overflow: visible;
+                background: #fff;
+            }
+
+            .deck-stage {
+                position: static;
+                width: auto;
+                height: auto;
+                transform: none !important;
+                background: none;
+            }
+
+            .slide {
+                position: relative;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+                width: 1920px;
+                height: 1080px;
+                break-after: page;
+                page-break-after: always;
+            }
+
+            .slide:last-child {
+                break-after: auto;
+                page-break-after: auto;
+            }
+
+            .deck-controls {
+                display: none !important;
+            }
+        }
+
+        /* 8. Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+        }
+
+        /* ===========================================
+           SLIDE IMAGE LAYER
+           Each original PPT image is presented full bleed inside the 1920x1080 stage.
+           =========================================== */
+        .slide-image {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            transform: scale(1.014);
+            filter: saturate(1.02) contrast(1.01);
+            transition: transform 900ms var(--ease-out-expo),
+                        filter 900ms var(--ease-out-expo);
+            will-change: transform;
+        }
+
+        .slide.visible .slide-image {
+            transform: scale(1);
+        }
+
+        .slide::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 18%, transparent 82%, rgba(3, 24, 53, 0.08)),
+                radial-gradient(circle at 92% 88%, rgba(25, 118, 255, 0.12), transparent 34%);
+            opacity: 0;
+            transition: opacity 700ms var(--ease-out-expo);
+        }
+
+        .slide.visible::after {
+            opacity: 1;
+        }
+
+        /* ===========================================
+           DECK CHROME
+           Navigation controls live outside the 1920x1080 content stage.
+           =========================================== */
+        .deck-controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 14px;
+            border: 1px solid var(--chrome-border);
+            border-radius: 999px;
+            color: var(--chrome-text);
+            background: var(--chrome-bg);
+            backdrop-filter: blur(18px) saturate(1.4);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+            font-family: var(--font-display);
+            font-weight: 700;
+            letter-spacing: 0;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 260ms ease, transform 260ms ease;
+        }
+
+        body.show-ui .deck-controls {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .control-button {
+            width: 40px;
+            height: 40px;
+            border: 0;
+            border-radius: 999px;
+            color: var(--chrome-text);
+            background: rgba(255, 255, 255, 0.12);
+            cursor: pointer;
+            transition: transform 180ms ease, background 180ms ease;
+        }
+
+        .control-button:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .slide-count {
+            min-width: 76px;
+            text-align: center;
+            font-size: 15px;
+            color: var(--chrome-muted);
+        }
+
+        .progress-shell {
+            width: min(36vw, 420px);
+            height: 8px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.16);
+        }
+
+        .progress-bar {
+            width: 12.5%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--accent), #ffe084 38%, var(--accent-blue));
+            transition: width 320ms var(--ease-out-expo);
+        }
+
+        .top-hint {
+            position: fixed;
+            top: 20px;
+            right: 22px;
+            z-index: 1000;
+            padding: 9px 13px;
+            border: 1px solid rgba(180, 217, 255, 0.26);
+            border-radius: 999px;
+            color: rgba(248, 251, 255, 0.78);
+            background: rgba(6, 25, 52, 0.44);
+            backdrop-filter: blur(14px);
+            font-family: var(--font-display);
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity 260ms ease, transform 260ms ease;
+        }
+
+        body.show-ui .top-hint {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ===========================================
+           THUMBNAIL RAIL
+           Compact visual navigation for fast slide jumps.
+           =========================================== */
+        .thumb-rail {
+            position: fixed;
+            left: 22px;
+            top: 50%;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+            transform: translateY(-50%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 260ms ease;
+        }
+
+        body.show-ui .thumb-rail {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .thumb {
+            width: 46px;
+            height: 27px;
+            padding: 0;
+            overflow: hidden;
+            border: 1px solid rgba(180, 217, 255, 0.24);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            opacity: 0.58;
+            transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease;
+        }
+
+        .thumb img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .thumb.active {
+            opacity: 1;
+            transform: translateX(5px) scale(1.06);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(243, 179, 0, 0.18);
+        }
+
+        /* ===========================================
+           INLINE EDITING AFFORDANCE
+           Image slides are visually locked, but captions can be edited for presenter notes.
+           =========================================== */
+        .edit-hotzone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 10000;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+        }
+
+        .edit-toggle {
+            position: fixed;
+            top: 18px;
+            left: 18px;
+            z-index: 10001;
+            width: 42px;
+            height: 42px;
+            border: 1px solid rgba(180, 217, 255, 0.38);
+            border-radius: 999px;
+            color: var(--chrome-text);
+            background: var(--chrome-bg);
+            opacity: 0;
+            pointer-events: none;
+            cursor: pointer;
+            transition: opacity 250ms ease, transform 250ms ease;
+        }
+
+        .edit-toggle.show,
+        .edit-toggle.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .caption-chip {
+            position: absolute;
+            right: 30px;
+            bottom: 28px;
+            z-index: 3;
+            padding: 9px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            border-radius: 999px;
+            color: rgba(255, 255, 255, 0.86);
+            background: rgba(4, 22, 50, 0.42);
+            backdrop-filter: blur(14px);
+            font-family: var(--font-display);
+            font-size: 17px;
+            font-weight: 700;
+            opacity: 0;
+            transform: translateY(12px);
+            transition: opacity 260ms var(--ease-out-expo), transform 260ms var(--ease-out-expo);
+        }
+
+        body.editing .caption-chip {
+            opacity: 1;
+            transform: translateY(0);
+            outline: 2px dashed var(--accent);
+            background: rgba(4, 22, 50, 0.72);
+        }
+
+        /* ===========================================
+           MOBILE CHROME TUNING
+           The slide itself never reflows; only controls become smaller.
+           =========================================== */
+        @media (max-width: 720px) {
+            .thumb-rail,
+            .top-hint {
+                display: none;
+            }
+
+            .deck-controls {
+                bottom: 12px;
+                gap: 8px;
+                padding: 8px 10px;
+            }
+
+            .control-button {
+                width: 34px;
+                height: 34px;
+            }
+
+            .progress-shell {
+                width: 34vw;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .slide-image,
+            .slide::after,
+            .caption-chip,
+            .progress-bar,
+            .thumb,
+            .control-button {
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="deck-viewport" aria-label="懂车帝用户运营体系 HTML 幻灯片">
+        <main class="deck-stage" id="deckStage">
+            <section class="slide active visible" data-title="构建用户运营体系">
+                <img class="slide-image" src="assets/slide-01.png" alt="构建用户运营体系封面">
+                <div class="caption-chip" contenteditable="false">01 / 构建用户运营体系</div>
+            </section>
+            <section class="slide" data-title="收入增长结构性瓶颈">
+                <img class="slide-image" src="assets/slide-02.png" alt="收入增长结构性瓶颈">
+                <div class="caption-chip" contenteditable="false">02 / 收入增长结构性瓶颈</div>
+            </section>
+            <section class="slide" data-title="从线索经营升级为用户运营">
+                <img class="slide-image" src="assets/slide-03.png" alt="问题判断：从线索经营升级为用户运营">
+                <div class="caption-chip" contenteditable="false">03 / 用户运营升级判断</div>
+            </section>
+            <section class="slide" data-title="获客扩容">
+                <img class="slide-image" src="assets/slide-04.png" alt="获客扩容：扩大端外多流量开口">
+                <div class="caption-chip" contenteditable="false">04 / 获客扩容</div>
+            </section>
+            <section class="slide" data-title="从线索到立体客户画像">
+                <img class="slide-image" src="assets/slide-05.png" alt="用户池：从线索到立体客户画像">
+                <div class="caption-chip" contenteditable="false">05 / 用户池与客户画像</div>
+            </section>
+            <section class="slide" data-title="AI承接">
+                <img class="slide-image" src="assets/slide-06.png" alt="AI承接：客户沉淀及析出多品线索">
+                <div class="caption-chip" contenteditable="false">06 / AI承接多品线索</div>
+            </section>
+            <section class="slide" data-title="构建心智">
+                <img class="slide-image" src="assets/slide-07.png" alt="构建心智：从查车选车走向买车提车">
+                <div class="caption-chip" contenteditable="false">07 / 构建买车提车心智</div>
+            </section>
+            <section class="slide" data-title="一客一人专属服务">
+                <img class="slide-image" src="assets/slide-08.png" alt="AI一客一人专属服务">
+                <div class="caption-chip" contenteditable="false">08 / 一客一人专属服务</div>
+            </section>
+        </main>
+    </div>
+
+    <div class="top-hint">← → / Space 翻页 · F 全屏 · E 编辑页脚标签</div>
+
+    <nav class="thumb-rail" aria-label="幻灯片缩略导航">
+        <button class="thumb active" data-index="0" aria-label="跳转到第 1 页"><img src="assets/slide-01.png" alt=""></button>
+        <button class="thumb" data-index="1" aria-label="跳转到第 2 页"><img src="assets/slide-02.png" alt=""></button>
+        <button class="thumb" data-index="2" aria-label="跳转到第 3 页"><img src="assets/slide-03.png" alt=""></button>
+        <button class="thumb" data-index="3" aria-label="跳转到第 4 页"><img src="assets/slide-04.png" alt=""></button>
+        <button class="thumb" data-index="4" aria-label="跳转到第 5 页"><img src="assets/slide-05.png" alt=""></button>
+        <button class="thumb" data-index="5" aria-label="跳转到第 6 页"><img src="assets/slide-06.png" alt=""></button>
+        <button class="thumb" data-index="6" aria-label="跳转到第 7 页"><img src="assets/slide-07.png" alt=""></button>
+        <button class="thumb" data-index="7" aria-label="跳转到第 8 页"><img src="assets/slide-08.png" alt=""></button>
+    </nav>
+
+    <div class="deck-controls" role="toolbar" aria-label="幻灯片控制">
+        <button class="control-button" id="prevBtn" aria-label="上一页">‹</button>
+        <div class="slide-count" id="slideCount">1 / 8</div>
+        <div class="progress-shell" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+        <button class="control-button" id="nextBtn" aria-label="下一页">›</button>
+        <button class="control-button" id="fullBtn" aria-label="全屏">⛶</button>
+    </div>
+
+    <div class="edit-hotzone" aria-hidden="true"></div>
+    <button class="edit-toggle" id="editToggle" title="编辑页脚标签（E）" aria-label="编辑页脚标签">✎</button>
+
+    <script>
+        /* ===========================================
+           SLIDE PRESENTATION CONTROLLER
+           Handles fixed-stage scaling, keyboard, wheel, touch, and thumbnails.
+           =========================================== */
+        class SlidePresentation {
+            constructor() {
+                this.slides = Array.from(document.querySelectorAll('.slide'));
+                this.thumbs = Array.from(document.querySelectorAll('.thumb'));
+                this.currentSlide = 0;
+                this.stage = document.getElementById('deckStage');
+                this.count = document.getElementById('slideCount');
+                this.progress = document.getElementById('progressBar');
+                this.wheelLocked = false;
+                this.touchStartX = 0;
+                this.touchStartY = 0;
+                this.setupStageScale();
+                this.setupKeyboardNav();
+                this.setupTouchNav();
+                this.setupWheelNav();
+                this.setupButtons();
+                this.setupHashNavigation();
+                this.showSlide(this.indexFromHash() ?? 0, { replaceHash: true });
+            }
+
+            setupStageScale() {
+                const scale = () => {
+                    const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+                    const x = (window.innerWidth - 1920 * factor) / 2;
+                    const y = (window.innerHeight - 1080 * factor) / 2;
+                    this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+                };
+                scale();
+                window.addEventListener('resize', scale);
+            }
+
+            setupKeyboardNav() {
+                document.addEventListener('keydown', (event) => {
+                    if (event.target && event.target.getAttribute('contenteditable') === 'true') return;
+                    if (['ArrowRight', 'PageDown', ' '].includes(event.key)) {
+                        event.preventDefault();
+                        this.next();
+                    }
+                    if (['ArrowLeft', 'PageUp'].includes(event.key)) {
+                        event.preventDefault();
+                        this.prev();
+                    }
+                    if (event.key === 'Home') this.showSlide(0);
+                    if (event.key === 'End') this.showSlide(this.slides.length - 1);
+                    if (event.key === 'f' || event.key === 'F') this.toggleFullscreen();
+                });
+            }
+
+            setupTouchNav() {
+                window.addEventListener('touchstart', (event) => {
+                    const touch = event.changedTouches[0];
+                    this.touchStartX = touch.clientX;
+                    this.touchStartY = touch.clientY;
+                }, { passive: true });
+
+                window.addEventListener('touchend', (event) => {
+                    const touch = event.changedTouches[0];
+                    const dx = touch.clientX - this.touchStartX;
+                    const dy = touch.clientY - this.touchStartY;
+                    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+                        dx < 0 ? this.next() : this.prev();
+                    }
+                }, { passive: true });
+            }
+
+            setupWheelNav() {
+                window.addEventListener('wheel', (event) => {
+                    if (this.wheelLocked || Math.abs(event.deltaY) < 18) return;
+                    this.wheelLocked = true;
+                    event.deltaY > 0 ? this.next() : this.prev();
+                    setTimeout(() => { this.wheelLocked = false; }, 520);
+                }, { passive: true });
+            }
+
+            setupButtons() {
+                document.getElementById('prevBtn').addEventListener('click', () => this.prev());
+                document.getElementById('nextBtn').addEventListener('click', () => this.next());
+                document.getElementById('fullBtn').addEventListener('click', () => this.toggleFullscreen());
+                this.thumbs.forEach((thumb) => {
+                    thumb.addEventListener('click', () => this.showSlide(Number(thumb.dataset.index)));
+                });
+            }
+
+            setupHashNavigation() {
+                window.addEventListener('hashchange', () => {
+                    const index = this.indexFromHash();
+                    if (index !== null) this.showSlide(index, { replaceHash: true });
+                });
+            }
+
+            indexFromHash() {
+                const match = window.location.hash.match(/^#(?:slide-?)?(\d+)$/i);
+                if (!match) return null;
+                const number = Number.parseInt(match[1], 10);
+                if (!Number.isFinite(number)) return null;
+                return Math.max(0, Math.min(this.slides.length - 1, number - 1));
+            }
+
+            showSlide(index, options = {}) {
+                const clamped = Math.max(0, Math.min(index, this.slides.length - 1));
+                this.currentSlide = clamped;
+                this.slides.forEach((slide, i) => {
+                    slide.classList.toggle('active', i === clamped);
+                    slide.classList.toggle('visible', i === clamped);
+                });
+                this.thumbs.forEach((thumb, i) => {
+                    thumb.classList.toggle('active', i === clamped);
+                });
+                this.count.textContent = `${clamped + 1} / ${this.slides.length}`;
+                this.progress.style.width = `${((clamped + 1) / this.slides.length) * 100}%`;
+                if (!options.replaceHash) {
+                    history.replaceState(null, '', `#${clamped + 1}`);
+                }
+            }
+
+            next() {
+                this.showSlide(this.currentSlide + 1);
+            }
+
+            prev() {
+                this.showSlide(this.currentSlide - 1);
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen?.();
+                } else {
+                    document.exitFullscreen?.();
+                }
+            }
+        }
+
+        /* ===========================================
+           INLINE CAPTION EDITOR
+           Lets presenter adjust footer labels without changing the slide images.
+           =========================================== */
+        class CaptionEditor {
+            constructor() {
+                this.isActive = false;
+                this.toggle = document.getElementById('editToggle');
+                this.hotzone = document.querySelector('.edit-hotzone');
+                this.captions = Array.from(document.querySelectorAll('.caption-chip'));
+                this.hideTimeout = null;
+                this.restore();
+                this.bind();
+            }
+
+            bind() {
+                this.toggle.addEventListener('click', () => this.toggleEditMode());
+                this.hotzone.addEventListener('click', () => this.toggleEditMode());
+                this.hotzone.addEventListener('mouseenter', () => this.showToggle());
+                this.hotzone.addEventListener('mouseleave', () => this.scheduleHide());
+                this.toggle.addEventListener('mouseenter', () => this.showToggle());
+                this.toggle.addEventListener('mouseleave', () => this.scheduleHide());
+                document.addEventListener('keydown', (event) => {
+                    const editingText = event.target && event.target.getAttribute('contenteditable') === 'true';
+                    if ((event.key === 'e' || event.key === 'E') && !editingText) this.toggleEditMode();
+                    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+                        event.preventDefault();
+                        this.save();
+                    }
+                });
+                this.captions.forEach((caption) => {
+                    caption.addEventListener('input', () => this.save());
+                });
+            }
+
+            showToggle() {
+                clearTimeout(this.hideTimeout);
+                this.toggle.classList.add('show');
+            }
+
+            scheduleHide() {
+                clearTimeout(this.hideTimeout);
+                this.hideTimeout = setTimeout(() => {
+                    if (!this.isActive) this.toggle.classList.remove('show');
+                }, 400);
+            }
+
+            toggleEditMode() {
+                this.isActive = !this.isActive;
+                document.body.classList.toggle('editing', this.isActive);
+                this.toggle.classList.toggle('active', this.isActive);
+                this.toggle.classList.add('show');
+                this.captions.forEach((caption) => {
+                    caption.setAttribute('contenteditable', this.isActive ? 'true' : 'false');
+                });
+                if (!this.isActive) this.save();
+            }
+
+            save() {
+                const values = this.captions.map((caption) => caption.textContent.trim());
+                localStorage.setItem('dongchedi-user-ops-captions', JSON.stringify(values));
+            }
+
+            restore() {
+                try {
+                    const values = JSON.parse(localStorage.getItem('dongchedi-user-ops-captions') || '[]');
+                    values.forEach((value, index) => {
+                        if (value && this.captions[index]) this.captions[index].textContent = value;
+                    });
+                } catch {
+                    localStorage.removeItem('dongchedi-user-ops-captions');
+                }
+            }
+        }
+
+        /* ===========================================
+           INITIALIZATION
+           Starts navigation and lightweight caption editing after DOM is ready.
+           =========================================== */
+        const deck = new SlidePresentation();
+        const editor = new CaptionEditor();
+        let uiHideTimer = null;
+        const showUi = () => {
+            document.body.classList.add('show-ui');
+            clearTimeout(uiHideTimer);
+            uiHideTimer = setTimeout(() => {
+                if (!document.body.classList.contains('editing')) {
+                    document.body.classList.remove('show-ui');
+                }
+            }, 1700);
+        };
+        ['mousemove', 'touchstart', 'keydown'].forEach((eventName) => {
+            window.addEventListener(eventName, showUi, { passive: true });
+        });
+        window.deck = deck;
+        window.editor = editor;
+    </script>
+</body>
+</html>
